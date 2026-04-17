@@ -1,4 +1,4 @@
-# Contributor Covenant Code of Conduct — symptom-assist NSoC'26
+# Contributor Covenant Code of Conduct - symptom-assist | NSoC'26
 
 ![Community](https://img.shields.io/badge/Community-Welcoming-brightgreen?style=for-the-badge)
 ![PRs Welcome](https://img.shields.io/badge/PRs-Welcome-blue?style=for-the-badge) 
@@ -21,7 +21,7 @@
 ## 🤝 Our Pledge
 
 We, as members, contributors, and leaders, pledge to make participation in our community a **harassment-free experience for everyone**.
-We are committed to creating an **inclusive, friendly, and respectful environment** where collaboration thrives. 🌍💜
+We are committed to creating an **inclusive, friendly, and respectful environment** where collaboration thrives.🌍💜
 
 We pledge to:
 - Treat every individual with **respect and empathy**.
@@ -101,7 +101,7 @@ This Code of Conduct applies to:
 
 Whether you are **contributing code, writing documentation, attending discussions, or representing symptom-assist**, you are expected to follow this Code of Conduct.  
 
-Examples: official email, social media accounts, events, or meetups.  
+Examples: official email, social media accounts or google meets.  
 
 <p align="center">
   <img src="https://media0.giphy.com/media/v1.Y2lkPTc5MGI3NjExaTU4b3d5cXFndndqem14Ym1uOG95cXUxbWpvcTdzMDN3YjR1ZnRqayZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/H03PuVdwREB21ANkLX/giphy.gif" width="350" alt="Scope GIF">
