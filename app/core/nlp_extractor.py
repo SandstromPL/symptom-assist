@@ -137,14 +137,17 @@ _MANUAL_SYNONYMS: dict[str, list[str]] = {
 
 def _auto_synonyms(canonical: str) -> list[str]:
     """
-    Generates simple variations of a canonical symptom string.
+    Generate simple variants of a canonical symptom string.
+
+    Includes basic normalization such as:
+    - replacing underscores with spaces
+    - handling simple plural forms
 
     Args:
-        canonical (str): The base symptom string.
+        canonical (str): Base symptom string.
 
     Returns:
-        list[str]: List of generated synonym variants.
-
+        list[str]: Generated synonym variants.
     """
 
     variants = {canonical}
@@ -158,16 +161,16 @@ def _auto_synonyms(canonical: str) -> list[str]:
 
 def build_lexicon_from_csv(csv_path: str) -> dict[str, list[str]]:
     """
-    Builds a symptom lexicon from a CSV dataset.
+    Build a symptom lexicon from a CSV dataset.
 
-    Reads symptom columns from the dataset and creates a mapping of
-    canonical symptom names to their possible phrase variations.
+    Extracts symptom columns and maps each canonical symptom
+    to a list of phrase variants, combining manual and auto-generated synonyms.
 
     Args:
-        csv_path (str): Path to the symptom CSV file.
+        csv_path (str): Path to the dataset file.
 
     Returns:
-        dict[str, list[str]]: Dictionary mapping canonical symptoms to phrases.
+        dict[str, list[str]]: Mapping of canonical symptoms to phrases.
 
     Raises:
         FileNotFoundError: If the dataset file does not exist.
