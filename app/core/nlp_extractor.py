@@ -17,6 +17,7 @@ import re
 import csv
 import os
 from typing import NamedTuple
+import spacy
 
 try:
     from rapidfuzz import process as fuzz_process, fuzz
@@ -223,8 +224,50 @@ class SymptomExtractor:
             re.IGNORECASE
         )
 
+        # Initialize spaCy for dependency-based negation parsing
+        try:
+            self.nlp = spacy.load("en_core_web_sm")
+        except OSError:
+            print("[NLP] Model 'en_core_web_sm' not found. Please run 'python -m spacy download en_core_web_sm'")
+            self.nlp = None
+
         print(f"[NLP] Lexicon loaded: {len(lexicon)} canonical symptoms, "
               f"{len(self.phrase_to_symptom)} total phrases")
+
+    def _is_negated(self, doc, start_char: int, end_char: int) -> bool:
+        """
+        Determines if a symptom mention is negated using the dependency tree.
+        """
+        if not doc:
+            return False
+
+        # Find tokens that overlap with the character range [start_char, end_char)
+        symptom_tokens = [t for t in doc if t.idx >= start_char and t.idx < end_char]
+        if not symptom_tokens:
+            # Fallback for tokens that might start slightly before start_char (e.g. whitespace)
+            symptom_tokens = [t for t in doc if t.idx + len(t.text) > start_char and t.idx < end_char]
+
+        negation_words = {"no", "not", "without", "never", "deny", "denies", "absence", "negative"}
+
+        for token in symptom_tokens:
+            # 1. Direct children negation (e.g., "no fever")
+            if any(child.dep_ == "neg" or child.lemma_.lower() in negation_words for child in token.children):
+                return True
+            
+            # 2. Check ancestors (e.g., "denies pain" or "don't HAVE headache")
+            curr = token
+            while curr != curr.head:
+                curr = curr.head
+                # Check if the ancestor itself is a negation word (e.g. "DENIES pain")
+                if curr.lemma_.lower() in negation_words:
+                    return True
+                # If the ancestor has a negation child (e.g. "don't HAVE headache")
+                if any(child.dep_ == "neg" or child.lemma_.lower() in negation_words for child in curr.children):
+                    return True
+                if curr.pos_ == "VERB":
+                    break
+
+        return False
 
     def _fuzzy_match_token(self, token: str) -> tuple[str, str] | None:
         """
@@ -246,16 +289,7 @@ class SymptomExtractor:
 
     def extract(self, text: str) -> ExtractionResult:
         text_lower = text.lower()
-
-        # Detect negation windows (40 chars after negation keyword)
-        negated_spans: set[tuple] = set()
-        for match in self.negation_patterns.finditer(text_lower):
-            start = match.end()
-            end   = min(start + 40, len(text_lower))
-            negated_spans.add((start, end))
-
-        def is_negated(pos: int) -> bool:
-            return any(s <= pos <= e for s, e in negated_spans)
+        doc = self.nlp(text) if self.nlp else None
 
         found_symptoms:   list[str] = []
         negated_symptoms: list[str] = []
@@ -277,7 +311,7 @@ class SymptomExtractor:
                 raw_mentions.append(text[idx: idx + len(phrase)])
                 matched_positions |= positions
 
-                if is_negated(idx):
+                if self._is_negated(doc, idx, idx + len(phrase)):
                     if canonical not in negated_symptoms:
                         negated_symptoms.append(canonical)
                 else:
@@ -320,7 +354,7 @@ class SymptomExtractor:
                 matched_positions |= positions
                 raw_mentions.append(ngram)
 
-                if is_negated(approx_pos):
+                if self._is_negated(doc, approx_pos, approx_pos + len(ngram)):
                     if canonical not in negated_symptoms:
                         negated_symptoms.append(canonical)
                 else:
@@ -344,22 +378,26 @@ if __name__ == "__main__":
     csv_p = str(_here / "data" / "symptom_disease.csv")
 
     extractor = SymptomExtractor(csv_path=csv_p)
+    
+    print("\n" + "="*40)
+    print("      SYMPTOM EXTRACTION TESTER")
+    print("="*40)
+    print("Type your symptoms (or 'quit' to exit)")
 
-    tests = [
-        "I have a terrible headache on one side that's throbbing, sensitive to light",
-        "I've been vomiting and have diarrhoea, also stomach cramps",
-        "I feel really tired, have a fever and chills, my body is aching",
-        "I have no fever but my throat is sore and it hurts to swallow",
-        "burning sensation when I pee and I need to go to the toilet frequently",
-        # Typo / misspelling tests
-        "I have a bad fevver and feel very tierd",
-        "my throte is sore and I keep sneazing",
-        "I feel nauseus and have diahrea",
-    ]
-    for t in tests:
-        r = extractor.extract(t)
-        print(f"Input:    {t[:65]}...")
-        print(f"  Found:   {r.symptoms}")
-        if r.negated:
-            print(f"  Negated: {r.negated}")
-        print()
+    while True:
+        try:
+            t = input("\n[Input]: ").strip()
+            if not t or t.lower() in ["quit", "exit", "q"]:
+                print("Exiting...")
+                break
+                
+            r = extractor.extract(t)
+            print(f"  [Found]:   {r.symptoms}")
+            if r.negated:
+                print(f"  [Negated]: {r.negated}")
+            if not r.symptoms and not r.negated:
+                print("  [Result]:  No symptoms detected.")
+                
+        except KeyboardInterrupt:
+            print("\nExiting...")
+            break

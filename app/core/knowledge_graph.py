@@ -205,6 +205,9 @@ def traverse_graph(G: nx.DiGraph, symptoms: list[str]) -> list[dict]:
         if not found:
             unmatched.append(u)
 
+
+        matched_nodes = list(set(matched_nodes))
+
     if not matched_nodes:
         return []
 
