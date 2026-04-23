@@ -17,7 +17,9 @@ Dataset-driven: conditions, symptoms, and documents all come from
 
 import os
 import json
+import uuid
 import pathlib
+from datetime import datetime, timedelta
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -57,6 +59,32 @@ print("[startup] Groq client ready.")
 GROQ = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 # ---------------------------------------------------------------------------
+# Server-side session store  { session_id -> {symptoms, last_active} }
+# Sessions expire after 2 hours of inactivity.
+# ---------------------------------------------------------------------------
+SESSION_STORE: dict[str, dict] = {}
+SESSION_TTL = timedelta(hours=2)
+
+
+def _get_or_create_session(session_id: str | None) -> tuple[str, list[str]]:
+    """Return (session_id, current_symptoms). Creates a new session if needed."""
+    _purge_expired_sessions()
+    if session_id and session_id in SESSION_STORE:
+        SESSION_STORE[session_id]["last_active"] = datetime.utcnow()
+        return session_id, SESSION_STORE[session_id]["symptoms"]
+    new_id = str(uuid.uuid4())
+    SESSION_STORE[new_id] = {"symptoms": [], "last_active": datetime.utcnow()}
+    return new_id, []
+
+
+def _purge_expired_sessions() -> None:
+    """Drop sessions that have been inactive longer than SESSION_TTL."""
+    cutoff = datetime.utcnow() - SESSION_TTL
+    expired = [sid for sid, s in SESSION_STORE.items() if s["last_active"] < cutoff]
+    for sid in expired:
+        del SESSION_STORE[sid]
+
+# ---------------------------------------------------------------------------
 # FastAPI app
 # ---------------------------------------------------------------------------
 
@@ -80,10 +108,12 @@ class Message(BaseModel):
 
 class ChatRequest(BaseModel):
     messages: List[Message]
-    extracted_symptoms: Optional[List[str]] = []  # accumulate across turns
+    session_id: Optional[str] = None        # server echoes this back; client stores and re-sends
+    extracted_symptoms: Optional[List[str]] = []  # kept for backwards-compat; ignored when session exists
 
 class ChatResponse(BaseModel):
     reply: str
+    session_id: str                         # client must echo this on the next turn
     extracted_symptoms: List[str]
     symptom_timeline: List[str] = []
     top_conditions: List[dict]
@@ -228,12 +258,15 @@ async def chat(request: ChatRequest):
             ""
         )
 
+        # --- Session: load server-held symptom timeline ---
+        session_id, prior_symptoms = _get_or_create_session(request.session_id)
+
         # --- Step 1: NLP extraction ---
         extraction = NLP.extract(latest_user_msg)
-        all_symptoms = merge_symptom_timeline(
-            request.extracted_symptoms or [],
-            extraction.symptoms,
-        )
+        all_symptoms = merge_symptom_timeline(prior_symptoms, extraction.symptoms)
+
+        # Persist merged timeline back to session store
+        SESSION_STORE[session_id]["symptoms"] = all_symptoms
 
         # --- Step 2: Red flag check ---
         red_flags = check_red_flags(GRAPH, all_symptoms + (extraction.symptoms if extraction else []))
@@ -288,6 +321,7 @@ async def chat(request: ChatRequest):
 
         return ChatResponse(
             reply=reply,
+            session_id=session_id,
             extracted_symptoms=all_symptoms,
             symptom_timeline=all_symptoms,
             top_conditions=[
@@ -314,6 +348,15 @@ async def chat(request: ChatRequest):
         with open("error_log.txt", "w") as f:
             f.write(err_msg)
         raise HTTPException(status_code=500, detail=str(overall_e))
+
+
+@app.post("/session/clear")
+async def clear_session(body: dict):
+    """Clears the symptom timeline for a given session (used by 'New Chat')."""
+    session_id = body.get("session_id")
+    if session_id and session_id in SESSION_STORE:
+        del SESSION_STORE[session_id]
+    return {"cleared": True}
 
 
 # ---------------------------------------------------------------------------
