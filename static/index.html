@@ -960,6 +960,7 @@
 
   let history = [];
   let allSymptoms = [];
+  let sessionId = null;   // server-assigned session ID
   let isLoading = false;
 
   newChatBtn.addEventListener('click', () => {
@@ -1029,6 +1030,15 @@
   }
 
   function clearChat() {
+    // Tell the server to drop the session so symptom history is wiped
+    if (sessionId) {
+      fetch('/session/clear', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: sessionId })
+      });
+    }
+    sessionId = null;
     chatArea.innerHTML = '';
     history = [];
     allSymptoms = [];
@@ -1139,7 +1149,7 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: history,
-          extracted_symptoms: allSymptoms,
+          session_id: sessionId,   // server echoes this back; null on first turn
         })
       });
 
@@ -1147,6 +1157,8 @@
       const data = await res.json();
 
       removeTyping();
+      // Server now owns the symptom timeline; we just store the session_id
+      sessionId = data.session_id;
       allSymptoms = data.symptom_timeline || data.extracted_symptoms || [];
       history.push({ role: 'assistant', content: data.reply });
       addMessage('bot', data.reply);
