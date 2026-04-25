@@ -28,17 +28,29 @@
       --urgent: #ef4444;
     }
 
+    .dark-mode {
+      --bg: #0f172a;
+      --chat-bg: #020617;
+      --text-main: #f1f5f9;
+      --text-muted: #94a3b8;
+      --sidebar-bg:  #020617;
+    }
+
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
       font-family: 'Inter', sans-serif;
-      background: radial-gradient(circle at top left, #f1f5f9, #e2e8f0);
+      background: var(--bg);
       height: 100vh;
       display: flex;
       justify-content: center;
       align-items: center;
       color: var(--text-main);
       overflow: hidden;
+    }
+
+    .dark-mode body {
+      background: #020617;
     }
 
     /* ---- Main Layout Container ---- */
@@ -57,6 +69,10 @@
       position: relative;
     }
 
+    .dark-mode #root {
+      background: rgba(2, 6, 23, 0.8);
+    }
+
     /* ---- Chat Section ---- */
     #chat-section {
       display: flex;
@@ -67,13 +83,17 @@
       min-height: 0;
     }
 
+    .dark-mode #chat-section {
+      background: #020617;
+    }
+
     header {
       padding: 24px 32px;
       display: flex;
       align-items: center;
       justify-content: space-between;
       border-bottom: 1px solid #f1f5f9;
-      background: rgba(255, 255, 255, 0.8);
+      background: var(--chat-bg);
     }
 
     .brand { display: flex; align-items: center; gap: 14px; }
@@ -112,6 +132,27 @@
     #chat-area::-webkit-scrollbar { width: 6px; }
     #chat-area::-webkit-scrollbar-track { background: transparent; }
     #chat-area::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+    .dark-mode #chat-area::-webkit-scrollbar-thumb {
+      background: #334155;
+    }
+
+    /* Dark mode scrollbar */
+    .dark-mode ::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    .dark-mode ::-webkit-scrollbar-track {
+      background: #020617;
+    }
+
+    .dark-mode ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 10px;
+    }
+
+    .dark-mode ::-webkit-scrollbar-thumb:hover {
+      background: #475569;
+    }
 
     /* Messages */
     .msg { display: flex; gap: 16px; max-width: 80%; opacity: 0; transform: translateY(10px); animation: fadeInMsg 0.4s forwards; }
@@ -148,6 +189,58 @@
       border: 1px solid #fee2e2 !important;
     }
 
+    /* ---- Markdown Rendering in Bot Messages ---- */
+    .bot .msg-bubble p { margin: 0 0 8px; }
+    .bot .msg-bubble p:last-child { margin-bottom: 0; }
+    .bot .msg-bubble ul,
+    .bot .msg-bubble ol { padding-left: 20px; margin: 6px 0; }
+    .bot .msg-bubble li { margin: 3px 0; line-height: 1.5; }
+    .bot .msg-bubble strong { font-weight: 700; }
+    .bot .msg-bubble em { font-style: italic; }
+    .bot .msg-bubble h1,
+    .bot .msg-bubble h2,
+    .bot .msg-bubble h3 {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      font-weight: 700;
+      margin: 10px 0 4px;
+      line-height: 1.3;
+      color: var(--text-main);
+    }
+    .bot .msg-bubble h1 { font-size: 16px; }
+    .bot .msg-bubble h2 { font-size: 15px; }
+    .bot .msg-bubble h3 { font-size: 14px; }
+    .bot .msg-bubble code {
+      background: #e2e8f0;
+      padding: 2px 5px;
+      border-radius: 4px;
+      font-size: 12.5px;
+      font-family: monospace;
+    }
+    .bot .msg-bubble pre {
+      background: #1e293b;
+      color: #e2e8f0;
+      padding: 12px;
+      border-radius: 8px;
+      margin: 8px 0;
+      overflow-x: auto;
+    }
+    .bot .msg-bubble pre code {
+      background: transparent;
+      padding: 0;
+      font-size: 12px;
+    }
+    .bot .msg-bubble hr {
+      border: none;
+      border-top: 1px solid #e2e8f0;
+      margin: 10px 0;
+    }
+    .bot .msg-bubble blockquote {
+      border-left: 3px solid var(--primary-light);
+      padding-left: 12px;
+      margin: 8px 0;
+      color: var(--text-muted);
+    }
+
     .typing-dots { display: flex; gap: 4px; padding: 12px 16px; background: var(--bg); border-radius: 20px; border: 1px solid #e2e8f0; width: fit-content; }
     .dot { width: 6px; height: 6px; background: #94a3b8; border-radius: 50%; animation: dotBounce 1.4s infinite ease-in-out; }
     .dot:nth-child(2) { animation-delay: 0.2s; }
@@ -155,11 +248,15 @@
     @keyframes dotBounce { 0%, 80%, 100% { transform: scale(1); } 40% { transform: scale(1.4); opacity: 0.5; } }
 
     /* Footer */
-    footer { padding: 24px 32px 32px; background: #fff; position: relative; }
+    footer { padding: 24px 32px 32px; background: var(--chat-bg); position: relative; }
     .input-wrapper {
       display: flex; gap: 12px; background: var(--bg); border: 1.5px solid #e2e8f0;
       border-radius: 16px; padding: 6px; transition: all 0.2s ease;
       box-shadow: var(--shadow-sm);
+    }
+    .dark-mode .input-wrapper {
+      background: #020617;
+      border-color: #1e293b;
     }
     .input-wrapper:focus-within { border-color: var(--primary-light); box-shadow: 0 0 0 4px rgba(20, 184, 166, 0.1); }
 
@@ -230,18 +327,36 @@
       transform: translateX(-50%) scaleX(1.15);
     }
 
+    .dark-mode #sidebar {
+      background: #020617;
+    }
+
     .sidebar-header {
       padding: 24px 32px;
       border-bottom: 1px solid rgba(226, 232, 240, 0.8);
-      background: rgba(255, 255, 255, 0.5);
+      background: var(--chat-bg);
     }
+    
+    .dark-mode .sidebar-header {
+      background: #020617;
+      border-bottom: 1px solid #1e293b;
+    }
+
     .sidebar-header h2 { font-family: 'Plus Jakarta Sans', sans-serif; font-size: 16px; font-weight: 700; color: var(--text-main); }
     .sidebar-header p { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
 
     .sidebar-content { flex: 1; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 20px; }
     
+    .dark-mode .sidebar-content {
+      background: #020617;
+    }
+
+    .dark-mode .sidebar-content::-webkit-scrollbar-track {
+      background: #020617;
+    }
+
     .card {
-      background: #fff; border: 1px solid rgba(226, 232, 240, 0.8);
+      background: var(--chat-bg); border: 1px solid rgba(226, 232, 240, 0.8);
       border-radius: 20px; padding: 20px; box-shadow: var(--shadow-sm);
       transition: transform 0.2s ease;
     }
@@ -302,10 +417,13 @@
     /* ---- Tab Switcher ---- */
     .tab-bar {
       display: flex; gap: 4px;
-      background: rgba(241,245,249,0.8);
+      background: var(--bg);
       border-radius: 10px;
       padding: 4px;
       margin-top: 12px;
+    }
+    .dark-mode .tab-bar {
+      background: #020617;
     }
     .tab-btn {
       flex: 1; padding: 7px 10px;
@@ -319,10 +437,16 @@
       text-transform: uppercase;
     }
     .tab-btn.active {
-      background: #fff;
+      background: var(--chat-bg);
       color: var(--primary);
       box-shadow: 0 1px 4px rgba(0,0,0,0.08);
     }
+
+    .dark-mode .tab-btn.active {
+      background: #1e293b;
+      color: #14b8a6;
+    }
+
     .tab-panel { display: none; }
     .tab-panel.active { display: flex; flex-direction: column; flex: 1; }
 
@@ -332,10 +456,12 @@
       position: relative;
       overflow: hidden;
       background: radial-gradient(ellipse at 50% 40%, #f0fdfa 0%, #f8fafc 100%);
-    }
+
     #graph-svg {
-      width: 100%; height: 100%;
-    }
+  width: 800px; 
+  height: 600px;
+}
+
 
     /* Nodes */
     .g-node circle {
@@ -441,9 +567,15 @@
         </div>
       </div>
       <div style="display: flex; align-items: center; gap: 12px;">
-        <button id="new-chat-btn" style="background: rgba(15, 118, 110, 0.1); color: var(--primary); border: 1px solid rgba(15, 118, 110, 0.2); padding: 8px 14px; border-radius: 10px; font-size: 11px; font-weight: 700; cursor: pointer; transition: all 0.2s;">
-          NEW CHAT
-        </button>
+      <!-- 🌙 Theme Toggle -->
+      <button id="theme-toggle" style="background: #e2e8f0; border: none; padding: 8px 12px; border-radius: 10px; cursor: pointer;">
+        🌙
+      </button>
+
+      <!-- New Chat Button -->
+      <button id="new-chat-btn" style="background: rgba(15, 118, 110, 0.1); color: var(--primary); border: 1px solid rgba(15, 118, 110, 0.2); padding: 8px 14px; border-radius: 10px; font-size: 11px; font-weight: 700; cursor: pointer; transition: all 0.2s;">
+        NEW CHAT
+      </button>
         <div class="status-indicator">
           <div class="status-dot"></div>
           <span>Live Analysis</span>
@@ -547,7 +679,7 @@
     <!-- TAB 2: Traversal Graph -->
     <div id="panel-graph" class="tab-panel" style="flex:1;position:relative;overflow:hidden;background:#f8fafc;">
       <div id="graph-panel" style="width:100%;height:100%;overflow:hidden;position:relative;">
-        <svg id="graph-svg" style="width:100%;height:100%;"></svg>
+       <svg id="graph-svg" width="800" height="600" viewBox="0 0 800 600"></svg>
         <div id="graph-empty-hint" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none;">
           <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 3"/></svg>
           <p style="color:#94a3b8;font-size:13px;margin-top:12px;text-align:center;line-height:1.6;">Graph builds as you chat.<br/>Send a symptom description to begin traversal.</p>
@@ -695,8 +827,12 @@
     if (existing) existing.innerHTML = '';
 
     const svg = d3.select('#graph-svg')
-      .style('background', THEME.bg)
-      .style('font-family', "'Inter', 'Roboto', sans-serif");
+  .attr('width', 800)
+  .attr('height', 600)
+  .attr('viewBox', '0 0 800 600')
+  .style('background', THEME.bg)
+  .style('font-family', "'Inter', 'Roboto', sans-serif");
+
 
     GRAPH.svg = svg;
 
@@ -1062,6 +1198,7 @@
 
   let history = [];
   let allSymptoms = [];
+  let sessionId = null;   // server-assigned session ID
   let isLoading = false;
 
   newChatBtn.addEventListener('click', () => {
@@ -1092,7 +1229,12 @@
     
     const bubble = document.createElement('div');
     bubble.className = 'msg-bubble';
-    bubble.textContent = text;
+
+    if (role === 'bot') {
+      bubble.innerHTML = DOMPurify.sanitize(marked.parse(text));
+    } else {
+      bubble.textContent = text;
+    }
     
     content.appendChild(bubble);
     msgDiv.appendChild(avatar);
@@ -1126,6 +1268,15 @@
   }
 
   function clearChat() {
+    // Tell the server to drop the session so symptom history is wiped
+    if (sessionId) {
+      fetch('/session/clear', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: sessionId })
+      });
+    }
+    sessionId = null;
     chatArea.innerHTML = '';
     history = [];
     allSymptoms = [];
@@ -1194,7 +1345,7 @@
     const travList = document.getElementById('trav-list');
     const path = data.traversal_path || [];
     if (path.length > 0) {
-      const shown = path.slice(0, 12);  // show first 12 steps
+      const shown = path.slice(0, 12);
       travList.innerHTML =
         `<div class="traversal-header">Visited ${path.length} edges · showing first ${shown.length}</div>` +
         shown.map((step, i) => `
@@ -1238,7 +1389,7 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: history,
-          extracted_symptoms: allSymptoms,
+          session_id: sessionId,   // server echoes this back; null on first turn
         })
       });
 
@@ -1246,13 +1397,13 @@
       const data = await res.json();
 
       removeTyping();
+      // Server now owns the symptom timeline; we just store the session_id
+      sessionId = data.session_id;
       allSymptoms = data.symptom_timeline || data.extracted_symptoms || [];
       history.push({ role: 'assistant', content: data.reply });
       addMessage('bot', data.reply);
-      // Attach traversal path to data for dashboard rendering
       data.traversal_path = data.top_conditions?.[0]?.traversal_path || [];
       updateDashboard(data);
-      // Update graph highlighting with backend-provided journey edges.
       highlightGraph(
         data.symptom_timeline || data.extracted_symptoms || [],
         data.top_conditions,
@@ -1280,4 +1431,26 @@
   }
 </script>
 </body>
+<script>
+  const toggleBtn = document.getElementById("theme-toggle");
+
+  // Load saved theme
+  if (localStorage.getItem("theme") === "dark") {
+    document.body.classList.add("dark-mode");
+    toggleBtn.textContent = "☀️";
+  }
+
+  toggleBtn.addEventListener("click", () => {
+    document.body.classList.toggle("dark-mode");
+
+    if (document.body.classList.contains("dark-mode")) {
+      localStorage.setItem("theme", "dark");
+      toggleBtn.textContent = "☀️";
+    } else {
+      localStorage.setItem("theme", "light");
+      toggleBtn.textContent = "🌙";
+    }
+  });
+</script>
+
 </html>

@@ -17,7 +17,9 @@ Dataset-driven: conditions, symptoms, and documents all come from
 
 import os
 import json
+import uuid
 import pathlib
+from datetime import datetime, timedelta
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -26,6 +28,10 @@ from pydantic import BaseModel
 from typing import List, Optional
 from groq import Groq
 from dotenv import load_dotenv
+import logging
+
+from .core.error_handler import APIErrorHandler, retry_with_backoff
+from .logging_config import setup_logging
 
 from .core.knowledge_graph import (
     load_graph_from_csv, traverse_graph, find_candidate_conditions,
@@ -35,6 +41,7 @@ from .core.rag_pipeline import RAGPipeline
 from .core.nlp_extractor import SymptomExtractor
 
 load_dotenv()
+setup_logging(log_dir="logs", level=logging.INFO)
 
 # ---------------------------------------------------------------------------
 # Resolve dataset paths (relative to the project root)
@@ -55,6 +62,32 @@ print("[startup] Loading NLP extractor (dynamic lexicon from CSV)...")
 NLP = SymptomExtractor(csv_path=_SYMPTOM_CSV)
 print("[startup] Groq client ready.")
 GROQ = Groq(api_key=os.getenv("GROQ_API_KEY"))
+
+# ---------------------------------------------------------------------------
+# Server-side session store  { session_id -> {symptoms, last_active} }
+# Sessions expire after 2 hours of inactivity.
+# ---------------------------------------------------------------------------
+SESSION_STORE: dict[str, dict] = {}
+SESSION_TTL = timedelta(hours=2)
+
+
+def _get_or_create_session(session_id: str | None) -> tuple[str, list[str]]:
+    """Return (session_id, current_symptoms). Creates a new session if needed."""
+    _purge_expired_sessions()
+    if session_id and session_id in SESSION_STORE:
+        SESSION_STORE[session_id]["last_active"] = datetime.utcnow()
+        return session_id, SESSION_STORE[session_id]["symptoms"]
+    new_id = str(uuid.uuid4())
+    SESSION_STORE[new_id] = {"symptoms": [], "last_active": datetime.utcnow()}
+    return new_id, []
+
+
+def _purge_expired_sessions() -> None:
+    """Drop sessions that have been inactive longer than SESSION_TTL."""
+    cutoff = datetime.utcnow() - SESSION_TTL
+    expired = [sid for sid, s in SESSION_STORE.items() if s["last_active"] < cutoff]
+    for sid in expired:
+        del SESSION_STORE[sid]
 
 # ---------------------------------------------------------------------------
 # FastAPI app
@@ -80,10 +113,12 @@ class Message(BaseModel):
 
 class ChatRequest(BaseModel):
     messages: List[Message]
-    extracted_symptoms: Optional[List[str]] = []  # accumulate across turns
+    session_id: Optional[str] = None        # server echoes this back; client stores and re-sends
+    extracted_symptoms: Optional[List[str]] = []  # kept for backwards-compat; ignored when session exists
 
 class ChatResponse(BaseModel):
     reply: str
+    session_id: str                         # client must echo this on the next turn
     extracted_symptoms: List[str]
     symptom_timeline: List[str] = []
     top_conditions: List[dict]
@@ -177,6 +212,30 @@ RULES:
 FINAL_LINK_THRESHOLD = 0.65
 
 
+@retry_with_backoff(max_retries=2, base_delay=1.0)
+def call_groq_api(messages: list, model: str = "llama-3.1-8b-instant") -> str:
+    """
+    Call Groq API with proper error handling and retry logic.
+    
+    Args:
+        messages: List of message dicts with role and content
+        model: Model name to use
+    
+    Returns:
+        str: API response content
+    
+    Raises:
+        Various exceptions with user-friendly handling
+    """
+    chat_completion = GROQ.chat.completions.create(
+        model=model,
+        messages=messages,
+        max_tokens=1000,
+        temperature=0.3,
+    )
+    return chat_completion.choices[0].message.content
+
+
 def merge_symptom_timeline(existing: List[str], newly_extracted: List[str]) -> List[str]:
     """Preserve first-seen order across turns while removing duplicates."""
     merged: List[str] = []
@@ -228,12 +287,15 @@ async def chat(request: ChatRequest):
             ""
         )
 
+        # --- Session: load server-held symptom timeline ---
+        session_id, prior_symptoms = _get_or_create_session(request.session_id)
+
         # --- Step 1: NLP extraction ---
         extraction = NLP.extract(latest_user_msg)
-        all_symptoms = merge_symptom_timeline(
-            request.extracted_symptoms or [],
-            extraction.symptoms,
-        )
+        all_symptoms = merge_symptom_timeline(prior_symptoms, extraction.symptoms)
+
+        # Persist merged timeline back to session store
+        SESSION_STORE[session_id]["symptoms"] = all_symptoms
 
         # --- Step 2: Red flag check ---
         red_flags = check_red_flags(GRAPH, all_symptoms + (extraction.symptoms if extraction else []))
@@ -272,22 +334,16 @@ async def chat(request: ChatRequest):
             messages.append({"role": role, "content": m.content})
 
         try:
-            chat_completion = GROQ.chat.completions.create(
-                model="llama-3.1-8b-instant", 
-                messages=messages,
-                max_tokens=1000,
-                temperature=0.3,
-            )
-            reply = chat_completion.choices[0].message.content
+            reply = call_groq_api(messages)
         except Exception as e:
-            print(f"DEBUG: Groq API Error Detected: {e}")
-            if "429" in str(e) or "limit" in str(e).lower():
-                reply = "I'm sorry, I'm receiving too many requests from this account right now. Please try again soon."
-            else:
-                reply = f"I'm having trouble connecting to my reasoning engine. Error: {type(e).__name__}"
+            # Log full error for debugging
+            APIErrorHandler.log_error(e, "Groq API call failed in /chat endpoint")
+            # Get user-friendly message
+            reply = APIErrorHandler.get_user_message(e)
 
         return ChatResponse(
             reply=reply,
+            session_id=session_id,
             extracted_symptoms=all_symptoms,
             symptom_timeline=all_symptoms,
             top_conditions=[
@@ -311,9 +367,19 @@ async def chat(request: ChatRequest):
         err_msg = traceback.format_exc()
         print("CRITICAL ERROR IN /chat ENDPOINT:")
         print(err_msg)
+        APIErrorHandler.log_error(overall_e, "Critical error in /chat endpoint")
         with open("error_log.txt", "w") as f:
             f.write(err_msg)
-        raise HTTPException(status_code=500, detail=str(overall_e))
+        raise HTTPException(status_code=500, detail=APIErrorHandler.get_user_message(overall_e))
+
+
+@app.post("/session/clear")
+async def clear_session(body: dict):
+    """Clears the symptom timeline for a given session (used by 'New Chat')."""
+    session_id = body.get("session_id")
+    if session_id and session_id in SESSION_STORE:
+        del SESSION_STORE[session_id]
+    return {"cleared": True}
 
 
 # ---------------------------------------------------------------------------
